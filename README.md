@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏃‍♂️ RunAgent (ラン・エージェント)
+**〜 完走証を解析し、次戦の武器に変える AI マラソンコーチ 〜**
 
-## Getting Started
+RunAgent は、マラソン完走証（画像・PDF）を AI で解析し、単なる記録のデータ化に留まらず、その大会の「コース特性」や「当時の天候」までを推論・アーカイブする、次世代のランナー向けログプラットフォームです。
 
-First, run the development server:
+## 🌟 プロジェクトの核心
+マラソンランナーにとって、完走証は努力の証ですが、数年も経つと「あの時はどんなコースだったか」「どんな気象条件だったか」という記憶は薄れてしまいます。RunAgent は、Gemini 2.0 の高度な推論能力を活用し、記録の背景にある「戦術データ」を自動的に復元します。
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 主な機能
+1. **インテリジェント・完走証解析**
+   - 画像や PDF から、氏名・大会名・日付・タイムを正確に抽出。
+   - **AI 推論**: 完走証に記載のない情報でも、大会名と開催日から当時のコースの起伏や気象傾向を Gemini が推論してレポートを生成。
+2. **努力のアーカイブ (Run Log)**
+   - Firestore と連携し、過去の全記録を美しいカード形式で一覧表示。
+3. **戦術レポート表示**
+   - 特定の大会をクリックすると、当時の詳細な分析結果をいつでも振り返ることが可能。
+4. **プライバシー保護 (自動匿名化)**
+   - デモ用として、抽出された実名を自動的に「常夏冬太郎」へ置換して保存するプライバシー保護ロジックを搭載。
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠 使用技術
+- **Frontend**: Next.js (App Router), Tailwind CSS
+- **Backend**: Python (Flask), Google Cloud Run
+- **AI**: Google Vertex AI (Gemini 2.0 Flash-exp)
+- **Database**: Google Cloud Firestore
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🏗 システム構成
+1. ユーザーが完走証を Next.js 経由でアップロード。
+2. Cloud Run 上の Python プログラムが Gemini 2.0 API を呼び出し。
+3. 抽出されたデータとお名前「常夏冬太郎」を Firestore に保存。
+4. 保存されたデータは `/history` 画面でリアクティブに表示。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📅 今後の展望
+- 過去のタイム推移のグラフ化機能。
+- 大会ごとのコース特性に基づいた、次戦の目標タイム自動算出機能。
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+Developed by **常夏冬太郎** (Tokonatsu Fuyutaro)
