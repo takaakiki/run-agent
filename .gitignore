@@ -43,3 +43,12 @@ next-env.d.ts
 __pycache__/
 *.pyc
 .venv/
+
+# Google Cloud / Firebase secrets
+*.json
+
+# Chrome Extension
+extension/
+
+# Local env files (already included in your list, but essential)
+.env*.local

@@ -1,91 +1,136 @@
-"use client";
-import React, { useEffect, useState, Suspense } from 'react';
+'use client';
+import { useEffect, useState, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+// 正しいパス指定
+import { db } from '../../lib/firebase';
+import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
+
+// タイムを秒数に変換する計算機
+const timeToSeconds = (timeStr: string) => {
+    if (!timeStr) return Infinity;
+    const h = timeStr.match(/(\d+)\s*時間/);
+    const m = timeStr.match(/(\d+)\s*分/);
+    const s = timeStr.match(/(\d+)\s*秒/);
+    return (h ? parseInt(h[1]) * 3600 : 0) + (m ? parseInt(m[1]) * 60 : 0) + (s ? parseInt(s[1]) : 0);
+};
 
 function HistoryContent() {
-    const router = useRouter();
     const searchParams = useSearchParams();
+    const router = useRouter();
+    const uid = searchParams.get('uid');
     const [history, setHistory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // 1. デフォルトの名前を「常夏冬太郎」に変更
-    const name = searchParams.get('name') || "常夏冬太郎";
-
-    const HISTORY_API = `https://extract-marathon-record-907424102289.asia-northeast2.run.app/history?name=${encodeURIComponent(name)}`;
-
-    useEffect(() => {
-        const fetchHistory = async () => {
-            try {
-                const res = await fetch(HISTORY_API);
-                if (!res.ok) throw new Error("データの取得に失敗しました");
-                const data = await res.json();
-                setHistory(data);
-            } catch (err) {
-                console.error("Fetch error:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchHistory();
-    }, [HISTORY_API]);
-
-    const handleCardClick = (record: any) => {
-        const params = new URLSearchParams({
-            name: record.athlete_name,
-            event: record.event_name,
-            date: record.event_date,
-            time: record.time,
-            features: record.course_features,
-            weather: record.weather_info
-        }).toString();
-
-        router.push(`/report?${params}`);
+    const fetchHistory = async () => {
+        if (!uid) { setLoading(false); return; }
+        try {
+            const q = query(
+                collection(db, "archives"),
+                where("uid", "==", uid),
+                orderBy("createdAt", "desc")
+            );
+            const querySnapshot = await getDocs(q);
+            const docs = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setHistory(docs);
+        } catch (error) { console.error("取得失敗:", error); }
+        finally { setLoading(false); }
     };
 
-    return (
-        <main className="min-h-screen bg-slate-50 p-6 md:p-12 font-sans">
-            <div className="max-w-4xl mx-auto space-y-8">
+    useEffect(() => { fetchHistory(); }, [uid]);
 
+    // シューズ別の統計分析
+    const shoeStats = useMemo(() => {
+        const stats: Record<string, { count: number, bestTime: string, bestSec: number }> = {};
+        history.forEach(item => {
+            const name = item.shoes || '未設定';
+            const sec = timeToSeconds(item.time);
+            if (!stats[name]) {
+                stats[name] = { count: 0, bestTime: item.time, bestSec: sec };
+            }
+            stats[name].count += 1;
+            if (sec < stats[name].bestSec) {
+                stats[name].bestTime = item.time;
+                stats[name].bestSec = sec;
+            }
+        });
+        return Object.entries(stats);
+    }, [history]);
+
+    const handleDelete = async (e: React.MouseEvent, id: string) => {
+        e.stopPropagation(); // 削除ボタンクリック時に詳細画面へ飛ぶのを防ぐ
+        if (!confirm("この記録を削除しますか？")) return;
+        try {
+            await deleteDoc(doc(db, "archives", id));
+            setHistory(history.filter(item => item.id !== id));
+        } catch (error) { console.error(error); }
+    };
+
+    if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">🏃‍♂️</div>;
+
+    return (
+        <main className="min-h-screen bg-slate-50 p-3 sm:p-6 font-sans text-slate-900">
+            <div className="max-w-4xl mx-auto space-y-6">
                 <div className="flex justify-between items-center">
-                    <button onClick={() => router.push('/')} className="text-slate-400 text-sm font-bold hover:text-slate-600 transition-colors">← TOP</button>
-                    <div className="bg-slate-900 text-white px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-sm">Archive</div>
+                    <h1 className="text-xl font-black italic tracking-tighter uppercase">Run Log Archive</h1>
+                    <button onClick={() => router.push('/')} className="text-[10px] font-bold text-slate-400 underline">TOP</button>
                 </div>
 
-                <header className="space-y-1">
-                    <h1 className="text-5xl font-black italic tracking-tighter text-slate-900 uppercase">Run Log</h1>
-                    <p className="text-slate-500 font-medium">{name} 選手の出場全記録</p>
-                </header>
-
-                {loading ? (
-                    <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                        <div className="w-8 h-8 border-4 border-slate-200 border-t-emerald-500 rounded-full animate-spin"></div>
-                        <p className="text-slate-400 text-sm font-bold animate-pulse">記録を読み込み中...</p>
+                {/* 統計サマリー */}
+                {shoeStats.length > 0 && (
+                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                        {shoeStats.map(([name, stat]) => (
+                            <div key={name} className="flex-shrink-0 bg-slate-900 text-white p-3 rounded-2xl min-w-[140px]">
+                                <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1 truncate">{name}</p>
+                                <div className="flex justify-between items-end">
+                                    <div>
+                                        <span className="text-lg font-black italic">{stat.count}</span>
+                                        <span className="text-[8px] ml-1 text-slate-400 font-bold uppercase">Runs</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[8px] text-slate-400 font-bold uppercase leading-none">Best</p>
+                                        <p className="text-[10px] font-black italic">{stat.bestTime}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                ) : history.length === 0 ? (
-                    <div className="bg-white rounded-[32px] p-16 text-center border-2 border-dashed border-slate-200">
-                        <p className="text-slate-400 font-bold">まだ記録がありません。</p>
+                )}
+
+                {/* 履歴リスト */}
+                {history.length === 0 ? (
+                    <div className="bg-white rounded-[24px] p-10 text-center border border-slate-100">
+                        <p className="text-slate-400 text-xs font-bold italic">No records found.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {history.map((record, index) => (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {history.map((item) => (
                             <div
-                                key={index}
-                                onClick={() => handleCardClick(record)}
-                                className="bg-white rounded-[28px] p-8 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group cursor-pointer"
+                                key={item.id}
+                                onClick={() => router.push(`/report?id=${item.id}&uid=${uid}`)} // カードクリックで編集へ
+                                className="bg-white rounded-[24px] shadow-sm p-5 border border-slate-100 relative group cursor-pointer hover:shadow-md transition-all active:scale-95"
                             >
-                                <div className="flex justify-between items-start mb-6">
-                                    <span className="text-[10px] font-black text-emerald-500 bg-emerald-50 py-1.5 px-4 rounded-full tracking-wider">
-                                        {record.event_date}
-                                    </span>
-                                    <span className="text-xl font-black text-slate-900 group-hover:text-emerald-500 transition-colors">
-                                        {record.time}
-                                    </span>
+                                <button
+                                    onClick={(e) => handleDelete(e, item.id)}
+                                    className="absolute top-4 right-4 text-slate-200 hover:text-red-500 text-xl transition-colors z-10"
+                                >
+                                    ×
+                                </button>
+                                <div className="flex justify-between items-center mb-3 pr-6">
+                                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-full uppercase">{item.date}</span>
+                                    <span className="text-lg font-black italic text-slate-900">{item.time}</span>
                                 </div>
-                                <h3 className="text-xl font-bold text-slate-800 mb-6 leading-tight">
-                                    {record.event_name}
-                                </h3>
-                                <div className="space-y-4 pt-6 border-t border-slate-50 text-[10px] font-bold text-slate-400 group-hover:text-slate-600 transition-colors">
-                                    詳しく見る →
+                                <h2 className="text-sm font-bold mb-4 leading-tight">{item.event}</h2>
+                                <div className="space-y-2 border-t border-slate-50 pt-4 text-[11px] font-bold text-slate-700">
+                                    <p>👟 {item.shoes || "未設定"}</p>
+                                    <p>🧪 {item.supplements || "なし"}</p>
+                                    {item.note && (
+                                        <p className="bg-slate-50 p-3 rounded-xl font-medium text-[10px] text-slate-600 italic leading-snug">
+                                            "{item.note}"
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -98,7 +143,7 @@ function HistoryContent() {
 
 export default function HistoryPage() {
     return (
-        <Suspense fallback={<div className="p-12 text-center text-slate-400">Loading...</div>}>
+        <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
             <HistoryContent />
         </Suspense>
     );
